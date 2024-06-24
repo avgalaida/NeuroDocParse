@@ -1,0 +1,11 @@
+opencv-python==4.9.0.80
+confluent-kafka==2.4.0
+minio==7.2.7
+numpy<2.0.0
+pillow==10.3.0
+asyncio==3.4.3
+aiofiles==23.2.1
+aiobotocore==2.13.0
+async_generator==1.10
+dependency_injector==4.41.0
+easyocr==1.7.1

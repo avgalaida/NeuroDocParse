@@ -1,0 +1,160 @@
+services:
+  frontend:
+    container_name: frontend_vue
+    build: ./services/frontend
+    ports:
+      - 5137:5137
+    environment:
+      - VUE_APP_GRAPHQL_HTTP=http://127.0.0.1:5050/graphql
+      - VUE_APP_GRAPHQL_WS=ws://127.0.0.1:5050/graphql
+      - VUE_APP_KEYCLOAK_URL=http://127.0.0.1:8080
+      - VUE_APP_KEYCLOAK_REALM=ndp
+      - VUE_APP_KEYCLOAK_CLIENT_ID=frontend-client
+
+  keycloak:
+    image: quay.io/keycloak/keycloak
+    container_name: keycloak
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    volumes:
+      - ./config:/opt/keycloak/data/import
+    ports:
+      - 8080:8080
+    command: ["start-dev", "--import-realm"]
+
+  gateway:
+    container_name: gateway_dotnet
+    build: ./services/gateway
+    ports:
+      - 5050:5050
+    depends_on:
+      - minio
+      - keycloak
+      - kafka
+
+  minio:
+    container_name: storage_minio
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9090"
+    restart: always
+    ports:
+      - 9000:9000
+      - 9090:9090
+    volumes:
+      - ~/minio/data:/data
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=Secure123$
+
+  zookeeper:
+      image: confluentinc/cp-zookeeper:7.2.1
+      hostname: zookeeper
+      container_name: zookeeper
+      ports:
+        - "2181:2181"
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-server:7.2.1
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9997:9997"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9997
+      KAFKA_JMX_HOSTNAME: kafka
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://kafka:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    command: >
+      sh -c "
+      /etc/confluent/docker/run &
+      /usr/bin/kafka-topics --create --topic documentDetection.request --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic documentDetection.result --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic fieldsDetection.request --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic fieldsDetection.result --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic textRecognition.request --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic textRecognition.result --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic extractData.request --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092 &&
+      /usr/bin/kafka-topics --create --topic extractData.result --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092
+      && tail -f /dev/null
+      "
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8082:8080
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "Kafka Cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "PLAINTEXT://kafka:29092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: "PLAINTEXT"
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9997
+      KAFKA_CLUSTERS_0_METRICS_TYPE: "JMX"
+
+
+  collector:
+    container_name: collector
+    build: ./services/collector
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKER=kafka:9092
+
+  doc_detect:
+    container_name: doc_detect
+    build: ./services/doc_detection
+    depends_on:
+      - kafka
+      - minio
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=Secure123$
+
+  field_detect:
+    container_name: field_detect
+    build: ./services/field_detection
+    depends_on:
+      - kafka
+      - minio
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=Secure123$
+  
+  text_recog:
+    container_name: text_recog
+    build: ./services/text_recog
+    depends_on:
+      - kafka
+      - minio
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=Secure123$
