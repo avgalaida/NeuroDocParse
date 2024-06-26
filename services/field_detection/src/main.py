@@ -24,7 +24,8 @@ async def process_detection_request(
 
     model.set_model(f"src/models/{document_name}.pt")
 
-    detection_result = model.predict(file_path)
+    loop = asyncio.get_event_loop()
+    detection_result = await loop.run_in_executor(None, model.predict, file_path)
 
     result_message = {
         'ClientId': image_info['ClientId'],

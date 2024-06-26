@@ -1,14 +1,16 @@
 using HotChocolate;
-using HotChocolate.Subscriptions;
+using HotChocolate.Types;
+using System.Text.Json;
 
-namespace gateway.GraphQL;
-
-public class Subscription
+namespace gateway.GraphQL
 {
-    [Subscribe]
-    [Topic]
-    public string OnImageUploaded([EventMessage] string imageUrl)
+    public class Subscription
     {
-        return imageUrl;
+        [Subscribe]
+        [Topic]
+        public async Task<JsonElement> DataExtracted([EventMessage] JsonElement extractedData)
+        {
+            return extractedData;
+        }
     }
 }

@@ -1,22 +1,25 @@
+// router/index.js
+
 import { createRouter, createWebHistory } from 'vue-router';
-import HomePage from './components/HomePage.vue';
-import UserRegister from './components/UserRegister.vue';
-import UserLogin from './components/UserLogin.vue';
-import UploadImage from './components/UploadImage.vue';
-import ExtractData from './components/ExtractData.vue';
-import RequestHistory from './components/RequestHistory.vue';
+import ExtractData from '../components/ExtractData.vue';
+import ImageEditor from '../components/ImageEditor.vue';
 
 const routes = [
-  { path: '/', component: HomePage },
-  { path: '/register', component: UserRegister },
-  { path: '/login', component: UserLogin },
-  { path: '/upload', component: UploadImage },
-  { path: '/extract', component: ExtractData },
-  { path: '/history', component: RequestHistory },
+  {
+    path: '/',
+    name: 'ExtractData',
+    component: ExtractData,
+  },
+  {
+    path: '/editor',
+    name: 'ImageEditor',
+    component: ImageEditor,
+    props: (route) => ({ imageUrl: route.query.url }),
+  },
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(process.env.BASE_URL),
   routes,
 });
 

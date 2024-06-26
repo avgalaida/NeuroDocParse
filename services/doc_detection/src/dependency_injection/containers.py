@@ -1,14 +1,13 @@
 from dependency_injector import containers, providers
 from src.broker.kafka_broker import KafkaBroker
-from src.broker.message_broker import IMessageBroker
-from src.storage.minio_client import MinioClient, IStorageClient
-from src.detect.yolo_model import YOLOModel, IModel
+from src.storage.minio_client import MinioClient
+from src.detect.yolo_model import YOLOModel
 import os
 
 class Container(containers.DeclarativeContainer):
     wiring_config = containers.WiringConfiguration(modules=["src.main"])
 
-    broker = providers.Factory(
+    broker = providers.Singleton(
         KafkaBroker,
         bootstrap_servers=os.getenv('KAFKA_BROKER', 'localhost:9092')
     )

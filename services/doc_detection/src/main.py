@@ -1,32 +1,43 @@
 import asyncio
+import json
+import os
 from dependency_injector.wiring import inject, Provide
-from src.broker.message_broker import IMessageBroker
+from src.broker.kafka_broker import KafkaBroker
 from src.storage.minio_client import IStorageClient
 from src.detect.yolo_model import IModel
 from src.dependency_injection.containers import Container
-from src.postprocces.crop import CropImage
-import json
-import os
+from src.proccessing.crop import CropImage
+from src.proccessing.rotate import rotate_image
 
 @inject
 async def process_detection_request(
     message,
-    broker: IMessageBroker = Provide[Container.broker],
+    broker: KafkaBroker = Provide[Container.broker],
     storage: IStorageClient = Provide[Container.storage],
     model: IModel = Provide[Container.model]
 ):
-    image_info = json.loads(message.value().decode('utf-8'))
+    image_info = json.loads(message.decode('utf-8'))
     bucket_name = image_info['BucketName']
     object_name = image_info['ObjectName']
     model_name = image_info['Model']
     file_path = f"/tmp/{object_name}"
+    rotated_file_path = f"/tmp/rotated_{object_name}"
 
     await storage.download_file(bucket_name, object_name, file_path)
 
-    model.set_model(f"src/models/{model_name}.pt")
-    detection_result = model.predict(file_path)
+    # Поворот изображения в отдельном потоке
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, rotate_image, file_path, rotated_file_path)
 
-    cropped_img_path = CropImage(file_path, detection_result['xyxy'])
+    if not os.path.exists(rotated_file_path):
+        rotated_file_path = file_path
+
+    model.set_model(f"src/models/{model_name}.pt")
+
+    # Предсказание модели в отдельном потоке
+    detection_result = await loop.run_in_executor(None, model.predict, rotated_file_path)
+
+    cropped_img_path = await loop.run_in_executor(None, CropImage, rotated_file_path, detection_result['xyxy'])
 
     await storage.upload_file(cropped_img_path, "croped", "croped_"+object_name)
 
@@ -38,23 +49,29 @@ async def process_detection_request(
     }
 
     serialized_message = json.dumps(result_message)
-    print(f"Serialized message: {serialized_message}")
 
-    broker.send_message('documentDetection.result', serialized_message)
-    broker.commit()
+    await broker.send_message('documentDetection.result', serialized_message)
+    await broker.commit()
+
+    print(f"Serialized message: {serialized_message}")
 
     if os.path.exists(file_path):
         os.remove(file_path)
-
+    if os.path.exists(rotated_file_path):
+        os.remove(rotated_file_path)
     if os.path.exists(cropped_img_path):
         os.remove(cropped_img_path)
 
 @inject
-async def main(broker: IMessageBroker = Provide[Container.broker]):
-    while True:
-        msg = broker.receive_message('documentDetection.request', 'docDetectGroup')
-        if msg:
-            await process_detection_request(msg)
+async def main(broker: KafkaBroker = Provide[Container.broker]):
+    await broker.start()
+    try:
+        while True:
+            msg = await broker.receive_message()
+            if msg:
+                await process_detection_request(msg.value)
+    finally:
+        await broker.stop()
 
 if __name__ == "__main__":
     container = Container()

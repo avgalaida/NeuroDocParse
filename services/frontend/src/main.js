@@ -6,14 +6,39 @@ import { WebSocketLink } from '@apollo/client/link/ws';
 import { getMainDefinition } from '@apollo/client/utilities';
 import App from './App.vue';
 import keycloak from './keycloak';
+import { createStore } from 'vuex';
 
-// Настройка Apollo клиента
+const store = createStore({
+  state: {
+    imageData: null,
+  },
+  mutations: {
+    setImageData(state, data) {
+      state.imageData = data;
+    },
+    clearImageData(state) {
+      state.imageData = null;
+    },
+  },
+  getters: {
+    imageData: (state) => state.imageData,
+  },
+  actions: {
+    setImageData({ commit }, data) {
+      commit('setImageData', data);
+    },
+    clearImageData({ commit }) {
+      commit('clearImageData');
+    },
+  },
+});
+
 const httpLink = new HttpLink({
-  uri: process.env.VUE_APP_GRAPHQL_HTTP,
+  uri: 'http://127.0.0.1:5050/graphql',
 });
 
 const wsLink = new WebSocketLink({
-  uri: process.env.VUE_APP_GRAPHQL_WS,
+  uri: 'ws://127.0.0.1:5050/graphql',
   options: {
     reconnect: true,
   },
@@ -46,7 +71,6 @@ const apolloClient = new ApolloClient({
   cache: new InMemoryCache(),
 });
 
-// Создание Apollo провайдера
 const apolloProvider = createApolloProvider({
   defaultClient: apolloClient,
 });
@@ -60,12 +84,13 @@ keycloak.init({
     const app = createApp({
       setup() {
         provide(DefaultApolloClient, apolloClient);
-        provide('keycloak', keycloak); // Provide keycloak instance to the app
+        provide('keycloak', keycloak);
       },
       render: () => h(App),
     });
     app.use(apolloProvider);
-    app.config.globalProperties.$keycloak = keycloak; // Add keycloak to global properties
+    app.use(store); // Добавление Vuex
+    app.config.globalProperties.$keycloak = keycloak;
     app.mount('#app');
   } else {
     console.log('Authentication failed');

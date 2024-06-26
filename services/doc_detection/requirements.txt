@@ -9,3 +9,4 @@ aiofiles==23.2.1
 aiobotocore==2.13.0
 async_generator==1.10
 dependency_injector==4.41.0
+aiokafka==0.7.2

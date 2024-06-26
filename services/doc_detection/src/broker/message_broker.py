@@ -1,15 +1,15 @@
 from abc import ABC, abstractmethod
 
-class IMessageBroker(ABC):
-    
+class IAsyncMessageBroker(ABC):
+
     @abstractmethod
-    def send_message(self, topic, message):
+    async def send_message(self, topic: str, message: str):
         pass
 
     @abstractmethod
-    def receive_message(self, topic, group_id):
+    async def receive_message(self, topic: str, group: str):
         pass
 
     @abstractmethod
-    def commit(self):
+    async def commit(self):
         pass

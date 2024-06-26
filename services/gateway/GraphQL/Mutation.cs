@@ -1,32 +1,36 @@
 using System.Text.Json;
-using System.Threading.Tasks;
-using HotChocolate;
-using HotChocolate.Types;
+using gateway.Service;
 using Microsoft.Extensions.Logging;
-using gateway.Service; // Убедитесь, что этот namespace правильный
+using HotChocolate.Subscriptions;
 
 namespace gateway.GraphQL
 {
     public class Mutation
     {
         private readonly ILogger<Mutation> _logger;
-        private readonly GatewayService _gatewayService; // Добавляем сервис
+        private readonly GatewayService _gatewayService;
+        private readonly ITopicEventSender _eventSender;
 
-        public Mutation(ILogger<Mutation> logger, GatewayService gatewayService)
+        public Mutation(ILogger<Mutation> logger, GatewayService gatewayService, ITopicEventSender eventSender)
         {
             _logger = logger;
-            _gatewayService = gatewayService; // Инициализируем сервис
+            _gatewayService = gatewayService;
+            _eventSender = eventSender;
         }
 
         public async Task<JsonElement> UploadImage(string b64Img, string userId)
         {
-            _logger.LogInformation("UploadImage called with userId: {UserId} and b64Img: {B64Img}", userId, b64Img);
+            _logger.LogInformation("UploadImage called with userId: {UserId}", userId);
             
-            // Используем сервис для извлечения данных
             var data = await _gatewayService.ExtractData(b64Img, userId, "triple", "default");
-            _logger.LogInformation("Extracted data: {Data}", data);
+            _logger.LogInformation("Data extracted");
 
-            return JsonDocument.Parse(data).RootElement;
+            var imageData = JsonDocument.Parse(data).RootElement;
+
+            // Публикация события
+            await _eventSender.SendAsync(nameof(Subscription.DataExtracted), imageData);
+
+            return imageData;
         }
     }
 

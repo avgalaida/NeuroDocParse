@@ -25,11 +25,11 @@ namespace gateway.Storage
             if (!found)
             {
                 await minio.MakeBucketAsync(new MakeBucketArgs().WithBucket(bucketName));
-                Console.WriteLine($"Bucket {bucketName} created successfully");
+                Console.WriteLine($"Bucket {bucketName} создан успешно");
             }
             else
             {
-                Console.WriteLine($"Bucket {bucketName} already exists");
+                Console.WriteLine($"Bucket {bucketName} уже существует");
             }
         }
 
@@ -40,7 +40,7 @@ namespace gateway.Storage
             
             using (var ms = new MemoryStream(bytesImg))
             {
-                await CreateBucketAsync(bucketName);
+                // await CreateBucketAsync(bucketName);
                 
                 try
                 {
@@ -51,12 +51,12 @@ namespace gateway.Storage
                         .WithObjectSize(ms.Length)
                         .WithContentType("image/png"));
                     
-                    Console.WriteLine($"Successfully uploaded {objectName} to {bucketName}");
+                    Console.WriteLine($"Успешно загружен {objectName} в {bucketName}");
                     return new ImageData { ObjectName = objectName, BucketName = bucketName };
                 }
                 catch (MinioException e)
                 {
-                    Console.WriteLine($"Error occurred: {e}");
+                    Console.WriteLine($"Произошла ошибка: {e}");
                     throw;
                 }
             }
@@ -66,20 +66,25 @@ namespace gateway.Storage
         {
             try
             {
-                await minio.GetObjectAsync(new GetObjectArgs()
-                    .WithBucket(bucketName)
-                    .WithObject(objectName)
-                    .WithCallbackStream(async (stream) =>
-                    {
-                        using (stream) // Ensure stream is disposed after use
+                using (MemoryStream memoryStream = new MemoryStream())
+                {
+                    await minio.GetObjectAsync(new GetObjectArgs()
+                        .WithBucket(bucketName)
+                        .WithObject(objectName)
+                        .WithCallbackStream(async (stream) =>
                         {
-                            await stream.CopyToAsync(destinationStream);
-                        }
-                    }));
+                            await stream.CopyToAsync(memoryStream);
+                        }));
+                    
+                    memoryStream.Seek(0, SeekOrigin.Begin);
+                    await memoryStream.CopyToAsync(destinationStream);
+                    await destinationStream.FlushAsync(); // Обеспечиваем запись всех данных
+                }
+                destinationStream.Seek(0, SeekOrigin.Begin); // Сброс позиции потока
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching image from Minio: {ex.Message}");
+                Console.WriteLine($"Ошибка при получении изображения из Minio: {ex.Message}");
                 throw;
             }
         }

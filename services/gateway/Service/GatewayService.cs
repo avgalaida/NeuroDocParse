@@ -59,6 +59,7 @@ namespace gateway.Service
                 jsonObject["Base64Image"] = JsonDocument.Parse($"\"{base64Image}\"").RootElement;
 
                 var updatedJson = JsonSerializer.Serialize(jsonObject, new JsonSerializerOptions { WriteIndented = true });
+
                 return updatedJson;
             }
         }

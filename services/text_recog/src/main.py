@@ -1,4 +1,3 @@
-# services/text_recog/src/main.py
 import asyncio
 import json
 import os
@@ -8,6 +7,7 @@ from src.broker.message_broker import IMessageBroker
 from src.storage.minio_client import IStorageClient
 from src.recognition.model_interface import ITextRecognitionModel
 from src.dependency_injection.containers import Container
+from src.doc_config.fields_conf import DOCUMENT_FIELD_CONFIGS, FieldType, FieldTransformations
 
 @inject
 async def process_detection_request(
@@ -29,11 +29,14 @@ async def process_detection_request(
     image = cv2.imread(file_path)
 
     recognized_fields = {}
+    field_config = DOCUMENT_FIELD_CONFIGS.get(document_name, {})
 
     for field_name, bboxes in fields.items():
         recognized_fields[field_name] = []
+        transformations = field_config.get(field_name, FieldTransformations(field_type=FieldType.TEXT))
+        
         for bbox in bboxes:
-            recognized_text = model.recognize_text(image, bbox)
+            recognized_text = model.recognize_text(image, bbox, transformations)
             recognized_fields[field_name].append(recognized_text)
 
     result_message = {

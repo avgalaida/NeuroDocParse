@@ -20,17 +20,26 @@
       </div>
     </div>
     <div class="document-image-container">
-      <img v-if="localDocument.Base64Image" :src="'data:image/png;base64,' + localDocument.Base64Image" class="document-image" />
+      <image-editor 
+        v-if="localDocument.Base64Image" 
+        :image-src="'data:image/png;base64,' + localDocument.Base64Image" 
+        @update:image="updateImage" 
+        :user-id="userId" 
+      />
     </div>
   </div>
 </template>
 
 <script>
 import { documentTemplates } from '../documentTemplates';
+import ImageEditor from './ImageEditor.vue'; // убедитесь, что путь правильный
 
 export default {
   name: 'DocumentTemplate',
-  props: ['document'],
+  components: {
+    ImageEditor,
+  },
+  props: ['document', 'userId'],
   data() {
     return {
       localDocument: this.convertDocument(this.document),
@@ -83,6 +92,10 @@ export default {
       a.download = 'document.json';
       a.click();
       URL.revokeObjectURL(url);
+    },
+    updateImage(base64Image) {
+      this.localDocument.Base64Image = base64Image;
+      this.$emit('update:image', base64Image);
     },
   },
 };

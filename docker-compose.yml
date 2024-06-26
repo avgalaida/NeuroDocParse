@@ -1,6 +1,6 @@
 services:
   frontend:
-    container_name: frontend_vue
+    container_name: frontend
     build: ./services/frontend
     ports:
       - 5137:5137
@@ -24,7 +24,7 @@ services:
     command: ["start-dev", "--import-realm"]
 
   gateway:
-    container_name: gateway_dotnet
+    container_name: gateway
     build: ./services/gateway
     ports:
       - 5050:5050
@@ -32,6 +32,8 @@ services:
       - minio
       - keycloak
       - kafka
+    networks:
+      - kafka-network
 
   minio:
     container_name: storage_minio
@@ -46,16 +48,20 @@ services:
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=Secure123$
+    networks:
+      - kafka-network
 
   zookeeper:
-      image: confluentinc/cp-zookeeper:7.2.1
-      hostname: zookeeper
-      container_name: zookeeper
-      ports:
-        - "2181:2181"
-      environment:
-        ZOOKEEPER_CLIENT_PORT: 2181
-        ZOOKEEPER_TICK_TIME: 2000
+    image: confluentinc/cp-zookeeper:7.2.1
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - kafka-network
 
   kafka:
     image: confluentinc/cp-server:7.2.1
@@ -79,6 +85,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_JMX_PORT: 9997
       KAFKA_JMX_HOSTNAME: kafka
+      KAFKA_MESSAGE_MAX_BYTES: 2000000
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 2000000
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://kafka:9092"]
@@ -98,6 +106,8 @@ services:
       /usr/bin/kafka-topics --create --topic extractData.result --partitions 1 --replication-factor 1 --if-not-exists --bootstrap-server kafka:9092
       && tail -f /dev/null
       "
+    networks:
+      - kafka-network
 
   kafka-ui:
     container_name: kafka-ui
@@ -113,7 +123,8 @@ services:
       KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: "PLAINTEXT"
       KAFKA_CLUSTERS_0_METRICS_PORT: 9997
       KAFKA_CLUSTERS_0_METRICS_TYPE: "JMX"
-
+    networks:
+      - kafka-network
 
   collector:
     container_name: collector
@@ -122,6 +133,8 @@ services:
       - kafka
     environment:
       - KAFKA_BROKER=kafka:9092
+    networks:
+      - kafka-network
 
   doc_detect:
     container_name: doc_detect
@@ -134,6 +147,8 @@ services:
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=Secure123$
+    networks:
+      - kafka-network
 
   field_detect:
     container_name: field_detect
@@ -146,6 +161,8 @@ services:
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=Secure123$
+    networks:
+      - kafka-network
   
   text_recog:
     container_name: text_recog
@@ -158,3 +175,9 @@ services:
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=Secure123$
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    driver: bridge
