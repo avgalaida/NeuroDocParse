@@ -5,7 +5,7 @@
     <div v-if="loading">Загрузка...</div>
     <div v-if="error">Ошибка: {{ error.message }}</div>
     <div v-if="data">
-      <DocumentTemplate :document="data.uploadImage" ref="documentTemplate" @update:image="uploadEditedImage" />
+      <DocumentTemplate :document="data.uploadImage" :userId="userId" @update:image="uploadEditedImage" />
     </div>
   </div>
 </template>
@@ -14,6 +14,7 @@
 import { mapActions, mapGetters } from 'vuex';
 import { UPLOAD_IMAGE_MUTATION, DATA_EXTRACTED_SUBSCRIPTION } from '@/graphql';
 import DocumentTemplate from './DocumentTemplate.vue';
+import { v4 as uuidv4 } from 'uuid';
 
 export default {
   name: 'ExtractData',
@@ -27,6 +28,9 @@ export default {
       data: null,
       b64Img: null,
       userId: null,
+      requestId: uuidv4(),
+      requestType: 'triple',
+      model: 'default',
     };
   },
   computed: {
@@ -44,27 +48,13 @@ export default {
   mounted() {
     this.resetState();
     const keycloak = this.$keycloak;
-    console.log('Keycloak instance:', keycloak);
     if (keycloak && keycloak.tokenParsed) {
       this.userId = keycloak.tokenParsed.sub;
-      console.log('User ID:', this.userId);
     } else {
       console.error('Keycloak token is not available.');
     }
 
-    this.$apollo.subscribe({
-      query: DATA_EXTRACTED_SUBSCRIPTION,
-    }).subscribe({
-      next: ({ data }) => {
-        console.log('Subscription data:', data);
-        this.setImageData(data.dataExtracted);
-
-        if (data.dataExtracted.Base64Image && this.$refs.documentTemplate) {
-          this.$refs.documentTemplate.updateImage(data.dataExtracted.Base64Image);
-        }
-      },
-      error: (err) => console.error('Subscription error:', err),
-    });
+    this.subscribeToDataExtracted();
   },
   beforeUnmount() {
     this.resetState();
@@ -93,29 +83,30 @@ export default {
         return;
       }
 
-      this.resetState();  // Явный сброс состояния перед началом новой загрузки
-
+      this.resetState();
       this.loading = true;
 
       try {
         const reader = new FileReader();
         reader.onload = async () => {
           this.b64Img = reader.result.split(',')[1];
-          console.log('Image base64:', this.b64Img);
-          console.log('User ID:', this.userId);
 
-          // Очистка кэша Apollo Client
           await this.$apollo.provider.defaultClient.cache.reset();
 
           try {
             await this.$apollo.mutate({
               mutation: UPLOAD_IMAGE_MUTATION,
-              variables: { b64Img: this.b64Img, userId: this.userId },
-              fetchPolicy: 'no-cache',  // Отключаем кэширование Apollo Client
+              variables: {
+                b64Img: this.b64Img,
+                userId: this.userId,
+                requestId: this.requestId,
+                requestType: this.requestType,
+                model: this.model,
+              },
+              fetchPolicy: 'no-cache',
             });
 
             console.log('Image upload mutation successful, waiting for subscription data...');
-            // Теперь ждем данные из подписки
           } catch (graphqlError) {
             this.error = graphqlError;
             console.error('GraphQL error:', graphqlError);
@@ -137,42 +128,50 @@ export default {
       this.error = null;
       this.data = null;
       this.b64Img = null;
-      this.clearImageData();  // Очистка данных изображения в Vuex
-      console.log('State reset');
+      this.clearImageData();
     },
     async uploadEditedImage(base64Image) {
-      if (!this.userId) {
-        this.error = new Error('User ID is not available.');
-        return;
-      }
-
-      this.resetState();  // Явный сброс состояния перед началом новой загрузки
-
+      this.requestId = uuidv4();
+      this.b64Img = base64Image;
       this.loading = true;
 
       try {
-        // Очистка кэша Apollo Client
-        await this.$apollo.provider.defaultClient.cache.reset();
+        await this.$apollo.mutate({
+          mutation: UPLOAD_IMAGE_MUTATION,
+          variables: {
+            b64Img: this.b64Img,
+            userId: this.userId,
+            requestId: this.requestId,
+            requestType: 'edited',
+            model: 'default',
+          },
+          fetchPolicy: 'no-cache',
+        });
 
-        try {
-          await this.$apollo.mutate({
-            mutation: UPLOAD_IMAGE_MUTATION,
-            variables: { b64Img: base64Image, userId: this.userId },
-            fetchPolicy: 'no-cache',  // Отключаем кэширование Apollo Client
-          });
-
-          console.log('Edited image upload mutation successful, waiting for subscription data...');
-          // Теперь ждем данные из подписки
-        } catch (graphqlError) {
-          this.error = graphqlError;
-          console.error('GraphQL error:', graphqlError);
-        } finally {
-          this.loading = false;
-        }
-      } catch (error) {
+        console.log('Edited image upload mutation successful, waiting for subscription data...');
+        this.subscribeToDataExtracted();
+      } catch (graphqlError) {
+        this.error = graphqlError;
+        console.error('GraphQL error:', graphqlError);
+      } finally {
         this.loading = false;
-        this.error = error;
-        console.error('File upload failed:', error);
+      }
+    },
+    subscribeToDataExtracted() {
+      this.$apollo.subscribe({
+        query: DATA_EXTRACTED_SUBSCRIPTION,
+        variables: { requestId: this.requestId },
+      }).subscribe({
+        next: ({ data }) => {
+          this.setImageData(data.dataExtracted);
+          this.updateImage(data.dataExtracted.Base64Image);
+        },
+        error: (err) => console.error('Subscription error:', err),
+      });
+    },
+    updateImage(base64Image) {
+      if (this.data && this.data.uploadImage) {
+        this.data.uploadImage.Base64Image = base64Image;
       }
     },
   },

@@ -20,11 +20,11 @@
       </div>
     </div>
     <div class="document-image-container">
-      <image-editor 
-        v-if="localDocument.Base64Image" 
-        :image-src="'data:image/png;base64,' + localDocument.Base64Image" 
-        @update:image="updateImage" 
-        :user-id="userId" 
+      <ImageEditor
+        v-if="localDocument.Base64Image"
+        :image-src="'data:image/png;base64,' + localDocument.Base64Image"
+        @update:image="updateImage"
+        :userId="userId"
       />
     </div>
   </div>
@@ -32,14 +32,14 @@
 
 <script>
 import { documentTemplates } from '../documentTemplates';
-import ImageEditor from './ImageEditor.vue'; // убедитесь, что путь правильный
+import ImageEditor from './ImageEditor.vue';
 
 export default {
   name: 'DocumentTemplate',
+  props: ['document', 'userId'],
   components: {
     ImageEditor,
   },
-  props: ['document', 'userId'],
   data() {
     return {
       localDocument: this.convertDocument(this.document),

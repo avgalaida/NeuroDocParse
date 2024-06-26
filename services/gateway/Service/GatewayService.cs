@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -19,7 +20,7 @@ namespace gateway.Service
             this.messageBroker = messageBroker;
         }
 
-        public async Task<string> ExtractData(string b64Img, string userId, string request, string model)
+        public async Task<string> ExtractData(string b64Img, string userId, string requestId, string requestType, string model)
         {
             var imageBytes = Convert.FromBase64String(b64Img);
             var imgData = await storage.UploadImage(imageBytes);
@@ -27,7 +28,8 @@ namespace gateway.Service
             var message = new
             {
                 ClientId = userId,
-                RequestType = request,
+                RequestId = requestId,
+                RequestType = requestType,
                 BucketName = imgData.BucketName,
                 ObjectName = imgData.ObjectName,
                 Model = model

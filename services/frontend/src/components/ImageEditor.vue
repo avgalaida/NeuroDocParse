@@ -33,7 +33,7 @@ export default {
     userId: {
       type: String,
       required: true,
-    }
+    },
   },
   data() {
     return {
@@ -54,13 +54,20 @@ export default {
     cropImage() {
       if (this.cropper) {
         const croppedCanvas = this.cropper.getCroppedCanvas();
-        this.$emit('update:image', croppedCanvas.toDataURL().split(',')[1]);
+        croppedCanvas.toBlob((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64data = reader.result.split(',')[1];
+            this.$emit('update:image', base64data);
+          };
+          reader.readAsDataURL(blob);
+        });
       }
     },
   },
   mounted() {
     this.onCropperReady();
-  }
+  },
 };
 </script>
 

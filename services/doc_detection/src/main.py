@@ -38,6 +38,7 @@ async def process_detection_request(
     detection_result = await loop.run_in_executor(None, model.predict, rotated_file_path)
 
     cropped_img_path = await loop.run_in_executor(None, CropImage, rotated_file_path, detection_result['xyxy'])
+    
 
     await storage.upload_file(cropped_img_path, "croped", "croped_"+object_name)
 

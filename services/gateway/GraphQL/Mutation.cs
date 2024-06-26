@@ -9,26 +9,26 @@ namespace gateway.GraphQL
     {
         private readonly ILogger<Mutation> _logger;
         private readonly GatewayService _gatewayService;
-        private readonly ITopicEventSender _eventSender;
+        private readonly EventPublisher _eventPublisher;
 
-        public Mutation(ILogger<Mutation> logger, GatewayService gatewayService, ITopicEventSender eventSender)
+        public Mutation(ILogger<Mutation> logger, GatewayService gatewayService, EventPublisher eventPublisher)
         {
             _logger = logger;
             _gatewayService = gatewayService;
-            _eventSender = eventSender;
+            _eventPublisher = eventPublisher;
         }
 
-        public async Task<JsonElement> UploadImage(string b64Img, string userId)
+        public async Task<JsonElement> UploadImage(string b64Img, string userId, string requestId, string requestType, string model)
         {
-            _logger.LogInformation("UploadImage called with userId: {UserId}", userId);
+            _logger.LogInformation("UploadImage called with userId: {UserId}, requestId: {RequestId}, requestType: {RequestType}, model: {Model}", userId, requestId, requestType, model);
             
-            var data = await _gatewayService.ExtractData(b64Img, userId, "triple", "default");
+            var data = await _gatewayService.ExtractData(b64Img, userId, requestId, requestType, model);
             _logger.LogInformation("Data extracted");
 
             var imageData = JsonDocument.Parse(data).RootElement;
 
             // Публикация события
-            await _eventSender.SendAsync(nameof(Subscription.DataExtracted), imageData);
+            await _eventPublisher.PublishDataExtracted(imageData, requestId);
 
             return imageData;
         }
@@ -45,7 +45,7 @@ namespace gateway.GraphQL
         }
 
         [GraphQLType(typeof(JsonType))]
-        public Task<JsonElement> UploadImage(string b64Img, string userId) =>
-            _mutation.UploadImage(b64Img, userId);
+        public Task<JsonElement> UploadImage(string b64Img, string userId, string requestId, string requestType, string model) =>
+            _mutation.UploadImage(b64Img, userId, requestId, requestType, model);
     }
 }

@@ -12,7 +12,7 @@ namespace gateway.Service
             _sender = sender;
         }
 
-        public async Task PublishDataExtracted(JsonElement extractedData)
+        public async Task PublishDataExtracted(JsonElement extractedData, string requestId)
         {
             await _sender.SendAsync("DataExtracted", extractedData);
         }

@@ -42,7 +42,7 @@ namespace collector.Service
                     // Парсинг входящего сообщения
                     var incomingMessage = JsonSerializer.Deserialize<IncomingMessage>(message);
 
-                    if (incomingMessage.RequestType == "triple")
+                    if (incomingMessage.RequestType == "triple" || incomingMessage.RequestType == "edited")
                     {
                         await ProcessTripleRequestAsync(incomingMessage, cancellationToken);
                     }
