@@ -1,12 +1,233 @@
 <template>
-    <div>
-      <h2>Разметка документа</h2>
-      <p>Эта страница пока что пустая.</p>
-    </div>
-  </template>
-  
-  <script>
-  export default {
-    name: 'DocumentMarkup'
-  };
-  </script>
+  <div class="document-markup">
+    <h2>Разметка документа</h2>
+    <form @submit.prevent="submitMarkup">
+      <input type="file" @change="onFileChange" ref="fileInput" style="display: none" />
+      <button type="button" @click="triggerFileInput">Загрузить изображение</button>
+      <div v-if="imageSrc">
+        <vue-cropper
+          v-if="!isCropped"
+          ref="cropper"
+          :src="imageSrc"
+          :guides="true"
+          :view-mode="1"
+          :auto-crop-area="0.8"
+          class="document-image"
+        />
+        <div class="cropper-controls" v-if="!isCropped">
+          <label for="rotation">Угол поворота:</label>
+          <input id="rotation" type="range" min="0" max="360" v-model="rotation" @input="rotateImage" />
+          <button type="button" @click="cropAndSaveImage">Обрезать и сохранить</button>
+        </div>
+        <div v-if="isCropped">
+          <img :src="newCroppedImageSrc" alt="Cropped Image" class="document-image" />
+          <div class="fields-container">
+            <div v-for="(field, index) in fields" :key="index" class="field" @click="highlightField(index)">
+              <input v-model="field.name" placeholder="Название поля" />
+              <button type="button" @click="setFieldMarkup(field)">Выбрать область</button>
+            </div>
+            <button type="button" @click="addField">Добавить поле</button>
+          </div>
+          <button type="submit">Отправить на обработку</button>
+        </div>
+      </div>
+      <div v-if="loading">Загрузка...</div>
+      <div v-if="error">Ошибка: {{ error.message }}</div>
+    </form>
+  </div>
+</template>
+
+<script>
+import VueCropper from 'vue-cropperjs';
+import 'cropperjs/dist/cropper.css';
+import { v4 as uuidv4 } from 'uuid';
+import { UPLOAD_IMAGE_WITH_FIELDS_MUTATION } from '@/graphql';
+import { mapActions } from 'vuex';
+
+export default {
+  name: 'DocumentMarkup',
+  components: {
+    VueCropper,
+  },
+  data() {
+    return {
+      imageSrc: null,
+      newCroppedImageSrc: null,
+      fields: [],
+      loading: false,
+      error: null,
+      userId: null,
+      requestId: uuidv4(),
+      rotation: 0,
+      activeFieldIndex: null,
+      isCropped: false,
+    };
+  },
+  mounted() {
+    const keycloak = this.$keycloak;
+    if (keycloak && keycloak.tokenParsed) {
+      this.userId = keycloak.tokenParsed.sub;
+    } else {
+      console.error('Keycloak token is not available.');
+    }
+  },
+  methods: {
+    ...mapActions(['setImageData']),
+    triggerFileInput() {
+      this.$refs.fileInput.click();
+    },
+    onFileChange(event) {
+      const files = event.target.files || event.dataTransfer.files;
+      if (!files.length) return;
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.imageSrc = reader.result;
+        this.isCropped = false;
+      };
+      reader.readAsDataURL(file);
+    },
+    addField() {
+      this.fields.push({ name: '', coordinates: [] });
+    },
+    setFieldMarkup(field) {
+      if (this.$refs.cropper) {
+        const cropper = this.$refs.cropper.cropper;
+        const cropData = cropper.getData(true);
+        field.coordinates = [
+          cropData.x,
+          cropData.y,
+          cropData.x + cropData.width,
+          cropData.y + cropData.height,
+        ];
+      }
+    },
+    highlightField(index) {
+      this.activeFieldIndex = index;
+      const field = this.fields[index];
+      if (field.coordinates.length && this.$refs.cropper) {
+        const cropper = this.$refs.cropper.cropper;
+        cropper.setData({
+          x: field.coordinates[0],
+          y: field.coordinates[1],
+          width: field.coordinates[2] - field.coordinates[0],
+          height: field.coordinates[3] - field.coordinates[1],
+        });
+      }
+    },
+    rotateImage() {
+      if (this.$refs.cropper) {
+        this.$refs.cropper.cropper.rotateTo(this.rotation);
+      }
+    },
+    cropAndSaveImage() {
+      if (this.$refs.cropper) {
+        const cropper = this.$refs.cropper.cropper;
+        const croppedCanvas = cropper.getCroppedCanvas();
+        croppedCanvas.toBlob((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            this.newCroppedImageSrc = reader.result;
+            this.isCropped = true;
+          };
+          reader.readAsDataURL(blob);
+        });
+      }
+    },
+    async submitMarkup() {
+      if (!this.newCroppedImageSrc || !this.fields.length || !this.userId) return;
+
+      this.loading = true;
+      this.error = null;
+
+      try {
+        const fieldsData = {};
+
+        this.fields.forEach((field) => {
+          if (field.name && field.coordinates.length) {
+            fieldsData[field.name] = [field.coordinates];
+          }
+        });
+
+        const { data } = await this.$apollo.mutate({
+          mutation: UPLOAD_IMAGE_WITH_FIELDS_MUTATION,
+          variables: {
+            b64Img: this.newCroppedImageSrc.split(',')[1],
+            userId: this.userId,
+            requestId: this.requestId,
+            model: 'default',
+            fields: fieldsData,
+          },
+        });
+
+        if (data) {
+          console.log('Image upload with fields mutation successful.');
+        } else {
+          throw new Error('No data returned from mutation.');
+        }
+      } catch (error) {
+        this.error = error;
+        console.error('GraphQL error:', error);
+      } finally {
+        this.loading = false;
+      }
+    },
+  },
+};
+</script>
+
+<style scoped>
+.document-markup {
+  text-align: center;
+}
+
+form {
+  display: inline-block;
+  text-align: left;
+}
+
+label, select, button {
+  display: block;
+  margin-bottom: 10px;
+}
+
+button {
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.fields-container {
+  margin-top: 20px;
+}
+
+.field {
+  margin-bottom: 10px;
+}
+
+.cropper-controls {
+  margin-top: 10px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 5px;
+  margin-bottom: 5px;
+}
+
+.document-image {
+  max-width: 100%;
+  height: auto;
+}
+</style>
