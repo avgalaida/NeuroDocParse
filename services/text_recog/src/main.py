@@ -40,7 +40,7 @@ async def process_detection_request(
             recognized_fields[field_name].append(recognized_text)
 
     result_message = {
-        'ClientId': image_info['ClientId'],
+        'RequestId': image_info['RequestId'],
         'BucketName': image_info['BucketName'],
         'ObjectName': image_info['ObjectName'],
         'DocumentName': image_info['DocumentName'],

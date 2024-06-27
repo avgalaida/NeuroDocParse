@@ -94,7 +94,7 @@ export default {
           await this.$apollo.provider.defaultClient.cache.reset();
 
           try {
-            await this.$apollo.mutate({
+            const { data } = await this.$apollo.mutate({
               mutation: UPLOAD_IMAGE_MUTATION,
               variables: {
                 b64Img: this.b64Img,
@@ -106,7 +106,11 @@ export default {
               fetchPolicy: 'no-cache',
             });
 
-            console.log('Image upload mutation successful, waiting for subscription data...');
+            if (data) {
+              console.log('Image upload mutation successful, waiting for subscription data...');
+            } else {
+              throw new Error('No data returned from mutation.');
+            }
           } catch (graphqlError) {
             this.error = graphqlError;
             console.error('GraphQL error:', graphqlError);
@@ -136,7 +140,7 @@ export default {
       this.loading = true;
 
       try {
-        await this.$apollo.mutate({
+        const { data } = await this.$apollo.mutate({
           mutation: UPLOAD_IMAGE_MUTATION,
           variables: {
             b64Img: this.b64Img,
@@ -148,8 +152,12 @@ export default {
           fetchPolicy: 'no-cache',
         });
 
-        console.log('Edited image upload mutation successful, waiting for subscription data...');
-        this.subscribeToDataExtracted();
+        if (data) {
+          console.log('Edited image upload mutation successful, waiting for subscription data...');
+          this.subscribeToDataExtracted();
+        } else {
+          throw new Error('No data returned from mutation.');
+        }
       } catch (graphqlError) {
         this.error = graphqlError;
         console.error('GraphQL error:', graphqlError);

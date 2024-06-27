@@ -1,11 +1,9 @@
 namespace collector.Domain;
 
-public class IncomingMessage
-{
-    public string? ClientId { get; set; }
+public class FieldsDetectionRequest
+{ 
     public string? RequestId { get; set; }
-    public string? RequestType { get; set; }
     public string? BucketName { get; set; }
     public string? ObjectName { get; set; }
-    public string? Model { get; set; }
+    public string? DocumentName { get; set; }
 }

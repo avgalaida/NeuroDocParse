@@ -43,7 +43,7 @@ async def process_detection_request(
     await storage.upload_file(cropped_img_path, "croped", "croped_"+object_name)
 
     result_message = {
-        'ClientId': image_info['ClientId'],
+        'RequestId': image_info['RequestId'],
         'BucketName': "croped",
         'ObjectName': "croped_"+object_name,
         'DocumentName': detection_result['document_name'],

@@ -21,6 +21,7 @@
     "vue": "^3.2.13",
     "vue-cropperjs": "^5.0.0",
     "vue-router": "^4.3.3",
+    "vue3-select": "^0.1.2",
     "vuex": "^4.0.2"
   },
   "devDependencies": {

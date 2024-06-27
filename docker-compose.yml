@@ -36,7 +36,7 @@ services:
       - kafka-network
 
   minio:
-    container_name: storage_minio
+    container_name: storage
     image: quay.io/minio/minio
     command: server /data --console-address ":9090"
     restart: always

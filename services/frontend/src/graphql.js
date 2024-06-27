@@ -6,6 +6,12 @@ export const UPLOAD_IMAGE_MUTATION = gql`
   }
 `;
 
+export const UPLOAD_IMAGE_WITH_FIELDS_MUTATION = gql`
+  mutation UploadImageWithFields($b64Img: String!, $userId: String!, $requestId: String!, $model: String!, $fields: JSON!) {
+    uploadImageWithFields(b64Img: $b64Img, userId: $userId, requestId: $requestId, model: $model, fields: $fields)
+  }
+`;
+
 export const DATA_EXTRACTED_SUBSCRIPTION = gql`
   subscription DataExtracted($requestId: String!) {
     dataExtracted(requestId: $requestId)

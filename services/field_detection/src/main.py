@@ -28,7 +28,7 @@ async def process_detection_request(
     detection_result = await loop.run_in_executor(None, model.predict, file_path)
 
     result_message = {
-        'ClientId': image_info['ClientId'],
+        'RequestId': image_info['RequestId'],
         'BucketName': image_info['BucketName'],
         'ObjectName': image_info['ObjectName'],
         'DocumentName': image_info['DocumentName'],

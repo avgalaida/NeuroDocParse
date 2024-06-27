@@ -46,12 +46,15 @@ namespace collector.Service
                     {
                         await ProcessTripleRequestAsync(incomingMessage, cancellationToken);
                     }
+                    else if (incomingMessage.RequestType == "duo")
+                    {
+                        await ProcessDuoRequestAsync(incomingMessage, cancellationToken);
+                    }
                     else
                     {
                         await _messageBroker.SendMessageAsync("extractData.result", "Unknown Request Type");
                     }
 
-                    // Логгирование успешной обработки сообщения
                     _logger.LogInformation("Message successfully processed and committed.");
                 }
             }
@@ -59,16 +62,26 @@ namespace collector.Service
 
         private async Task ProcessTripleRequestAsync(IncomingMessage incomingMessage, CancellationToken cancellationToken)
         {
-            // Шаг 1: Обработка documentDetection.request
             var docDetectRes = await ProcessDocDetectRequestAsync(incomingMessage, cancellationToken);
-
-            // Шаг 2: Обработка fieldsDetection.request
             var fieldsDetectRes = await ProcessFieldsDetectRequestAsync(docDetectRes, cancellationToken);
-
-            // Шаг 3: Обработка textRecognition.request
             var textRecognitionRes = await ProcessTextRecognitionRequestAsync(fieldsDetectRes, cancellationToken);
 
-            // Финальный шаг: отправка результата
+            await _messageBroker.SendMessageAsync("extractData.result", textRecognitionRes);
+        }
+
+        private async Task ProcessDuoRequestAsync(IncomingMessage incomingMessage, CancellationToken cancellationToken)
+        {
+            var fieldsDetectionRequest = new DocumentDetectionResult
+            {
+                RequestId = incomingMessage.RequestId,
+                BucketName = incomingMessage.BucketName,
+                ObjectName = incomingMessage.ObjectName,
+                DocumentName = incomingMessage.Model
+            };
+
+            var fieldsDetectRes = await ProcessFieldsDetectRequestAsync(fieldsDetectionRequest, cancellationToken);
+            var textRecognitionRes = await ProcessTextRecognitionRequestAsync(fieldsDetectRes, cancellationToken);
+
             await _messageBroker.SendMessageAsync("extractData.result", textRecognitionRes);
         }
 
@@ -76,7 +89,7 @@ namespace collector.Service
         {
             var docDetectRequest = new DocumentDetectionRequest
             {
-                ClientId = incomingMessage.ClientId,
+                RequestId = incomingMessage.RequestId,
                 BucketName = incomingMessage.BucketName,
                 ObjectName = incomingMessage.ObjectName,
                 Model = incomingMessage.Model

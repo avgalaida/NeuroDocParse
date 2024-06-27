@@ -32,6 +32,21 @@ namespace gateway.GraphQL
 
             return imageData;
         }
+
+        public async Task<JsonElement> UploadImageWithFields(string b64Img, string userId, string requestId, string model, Dictionary<string, List<List<double>>> fields)
+        {
+            _logger.LogInformation("UploadImageWithFields called with userId: {UserId}, requestId: {RequestId}, model: {Model}", userId, requestId, model);
+            
+            var data = await _gatewayService.ExtractDataWithFields(b64Img, userId, requestId, model, fields);
+            _logger.LogInformation("Data extracted with fields");
+
+            var imageData = JsonDocument.Parse(data).RootElement;
+
+            // Публикация события
+            await _eventPublisher.PublishDataExtracted(imageData, requestId);
+
+            return imageData;
+        }
     }
 
     [ExtendObjectType(Name = "Mutation")]
@@ -47,5 +62,9 @@ namespace gateway.GraphQL
         [GraphQLType(typeof(JsonType))]
         public Task<JsonElement> UploadImage(string b64Img, string userId, string requestId, string requestType, string model) =>
             _mutation.UploadImage(b64Img, userId, requestId, requestType, model);
+
+        [GraphQLType(typeof(JsonType))]
+        public Task<JsonElement> UploadImageWithFields(string b64Img, string userId, string requestId, string model, Dictionary<string, List<List<double>>> fields) =>
+            _mutation.UploadImageWithFields(b64Img, userId, requestId, model, fields);
     }
 }
