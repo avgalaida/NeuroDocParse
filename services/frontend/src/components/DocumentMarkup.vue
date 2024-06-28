@@ -20,7 +20,7 @@
           <button type="button" @click="cropAndSaveImage">Обрезать и сохранить</button>
         </div>
         <div v-if="isCropped">
-          <img :src="newCroppedImageSrc" alt="Cropped Image" class="document-image" />
+          <canvas ref="annotatedImageCanvas" :width="canvasWidth" :height="canvasHeight" @click="selectFieldArea"></canvas>
           <div class="fields-container">
             <div v-for="(field, index) in fields" :key="index" class="field" @click="highlightField(index)">
               <input v-model="field.name" placeholder="Название поля" />
@@ -61,6 +61,8 @@ export default {
       rotation: 0,
       activeFieldIndex: null,
       isCropped: false,
+      canvasWidth: 0,
+      canvasHeight: 0,
     };
   },
   mounted() {
@@ -91,29 +93,53 @@ export default {
       this.fields.push({ name: '', coordinates: [] });
     },
     setFieldMarkup(field) {
-      if (this.$refs.cropper) {
-        const cropper = this.$refs.cropper.cropper;
-        const cropData = cropper.getData(true);
+      if (this.$refs.annotatedImageCanvas) {
+        const rect = this.$refs.annotatedImageCanvas.getBoundingClientRect();
         field.coordinates = [
-          cropData.x,
-          cropData.y,
-          cropData.x + cropData.width,
-          cropData.y + cropData.height,
+          rect.left,
+          rect.top,
+          rect.right,
+          rect.bottom,
         ];
+      }
+    },
+    selectFieldArea(event) {
+      if (this.activeFieldIndex !== null) {
+        const field = this.fields[this.activeFieldIndex];
+        const rect = this.$refs.annotatedImageCanvas.getBoundingClientRect();
+        field.coordinates = [
+          event.clientX - rect.left,
+          event.clientY - rect.top,
+          event.clientX - rect.left + 100,
+          event.clientY - rect.top + 50,
+        ];
+        this.drawBoundingBox(field.coordinates[0], field.coordinates[1], 100, 50);
       }
     },
     highlightField(index) {
       this.activeFieldIndex = index;
       const field = this.fields[index];
-      if (field.coordinates.length && this.$refs.cropper) {
-        const cropper = this.$refs.cropper.cropper;
-        cropper.setData({
-          x: field.coordinates[0],
-          y: field.coordinates[1],
-          width: field.coordinates[2] - field.coordinates[0],
-          height: field.coordinates[3] - field.coordinates[1],
-        });
+      if (field.coordinates.length) {
+        const [x, y, x2, y2] = field.coordinates;
+        const width = x2 - x;
+        const height = y2 - y;
+        this.drawBoundingBox(x, y, width, height);
       }
+    },
+    drawBoundingBox(x, y, width, height) {
+      const canvas = this.$refs.annotatedImageCanvas;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const img = new Image();
+      img.src = this.newCroppedImageSrc;
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.beginPath();
+        ctx.rect(x, y, width, height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'red';
+        ctx.stroke();
+      };
     },
     rotateImage() {
       if (this.$refs.cropper) {
@@ -128,7 +154,12 @@ export default {
           const reader = new FileReader();
           reader.onloadend = () => {
             this.newCroppedImageSrc = reader.result;
+            this.canvasWidth = croppedCanvas.width;
+            this.canvasHeight = croppedCanvas.height;
             this.isCropped = true;
+            this.$nextTick(() => {
+              this.drawBoundingBox(0, 0, 0, 0); // Draw the initial image on canvas
+            });
           };
           reader.readAsDataURL(blob);
         });

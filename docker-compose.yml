@@ -32,6 +32,7 @@ services:
       - minio
       - keycloak
       - kafka
+      - collector_db
     networks:
       - kafka-network
 
@@ -131,8 +132,29 @@ services:
     build: ./services/collector
     depends_on:
       - kafka
+      - collector_db
     environment:
       - KAFKA_BROKER=kafka:9092
+      - DB_HOST=collector_db
+      - DB_PORT=5432
+      - DB_USER=yourusername
+      - DB_PASSWORD=yourpassword
+      - DB_NAME=ndp_db
+    networks:
+      - kafka-network
+
+  collector_db:
+    image: postgres:13
+    container_name: collector_db
+    environment:
+      POSTGRES_USER: yourusername
+      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_DB: ndp_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/collector_db_init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
     networks:
       - kafka-network
 
@@ -177,6 +199,25 @@ services:
       - MINIO_SECRET_KEY=Secure123$
     networks:
       - kafka-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - ./config/servers.json:/pgadmin4/servers.json
+    ports:
+      - "5051:80"
+    depends_on:
+      - collector_db
+    networks:
+      - kafka-network
+
+volumes:
+  postgres_data:
 
 networks:
   kafka-network:

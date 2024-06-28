@@ -21,3 +21,5 @@ services/doc_detection/src/.DS_Store
 .DS_Store
 services/field_detection/src/models/_passport.pt
 /services/field_detection/src/models
+/services/doc_detection/src/models
+/services/doc_detection/src/models

@@ -1,8 +1,7 @@
 using System.Text.Json;
 using collector.Broker;
 using collector.Domain;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using collector.Repository;
 
 namespace collector.Service
 {
@@ -10,11 +9,13 @@ namespace collector.Service
     {
         private readonly ILogger<CollectorService> _logger;
         private readonly IMessageBroker _messageBroker;
+        private readonly IDataBase _database;
 
-        public CollectorService(ILogger<CollectorService> logger, IMessageBroker messageBroker)
+        public CollectorService(ILogger<CollectorService> logger, IMessageBroker messageBroker, IDataBase database)
         {
             _logger = logger;
             _messageBroker = messageBroker;
+            _database = database;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -39,7 +40,6 @@ namespace collector.Service
                 {
                     _logger.LogInformation($"Received message: {message}");
 
-                    // Парсинг входящего сообщения
                     var incomingMessage = JsonSerializer.Deserialize<IncomingMessage>(message);
 
                     if (incomingMessage.RequestType == "triple" || incomingMessage.RequestType == "edited")
@@ -66,6 +66,8 @@ namespace collector.Service
             var fieldsDetectRes = await ProcessFieldsDetectRequestAsync(docDetectRes, cancellationToken);
             var textRecognitionRes = await ProcessTextRecognitionRequestAsync(fieldsDetectRes, cancellationToken);
 
+            await SaveRequestToDatabase(incomingMessage, textRecognitionRes);
+
             await _messageBroker.SendMessageAsync("extractData.result", textRecognitionRes);
         }
 
@@ -81,6 +83,8 @@ namespace collector.Service
 
             var fieldsDetectRes = await ProcessFieldsDetectRequestAsync(fieldsDetectionRequest, cancellationToken);
             var textRecognitionRes = await ProcessTextRecognitionRequestAsync(fieldsDetectRes, cancellationToken);
+
+            await SaveRequestToDatabase(incomingMessage, textRecognitionRes);
 
             await _messageBroker.SendMessageAsync("extractData.result", textRecognitionRes);
         }
@@ -130,6 +134,22 @@ namespace collector.Service
             _logger.LogInformation($"Text recognition result: {textRecognitionResult}");
 
             return textRecognitionResult;
+        }
+
+        private async Task SaveRequestToDatabase(IncomingMessage incomingMessage, string resultJson)
+        {
+            var requestHistory = new RequestHistory
+            {
+                RequestId = incomingMessage.RequestId,
+                UserId = incomingMessage.ClientId,
+                RequestType = incomingMessage.RequestType,
+                BucketName = incomingMessage.BucketName,
+                ObjectName = incomingMessage.ObjectName,
+                ResultJson = resultJson,
+                Timestamp = DateTime.UtcNow
+            };
+
+            await _database.SaveRequestAsync(requestHistory);
         }
     }
 }

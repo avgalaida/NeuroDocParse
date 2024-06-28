@@ -10,10 +10,22 @@ class YOLOModel(IModel):
         results = self.model(image_path)
         if not results:
             return None
+        
         result = results[0]
-        document_name = list(result.names.values())[0] if result.names else None
-        xywh = result.boxes.xywh[0].tolist() if result.boxes else None
-        xyxy = result.boxes.xyxy[0].tolist() if result.boxes else None
+        
+        # Находим самый вероятный класс документа
+        if result.names and result.boxes:
+            confidences = result.boxes.conf.numpy()
+            max_conf_idx = confidences.argmax()
+            
+            document_name = result.names[result.boxes.cls[max_conf_idx].item()]
+            xywh = result.boxes.xywh[max_conf_idx].tolist()
+            xyxy = result.boxes.xyxy[max_conf_idx].tolist()
+        else:
+            document_name = None
+            xywh = None
+            xyxy = None
+        
         return {
             'document_name': document_name,
             'xywh': xywh,
