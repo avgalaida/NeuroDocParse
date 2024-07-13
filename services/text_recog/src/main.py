@@ -19,31 +19,38 @@ async def process_detection_request(
     image_info = json.loads(message.value().decode('utf-8'))
     bucket_name = image_info['BucketName']
     object_name = image_info['ObjectName']
-    document_name = image_info['DocumentName']
+    document_name = image_info.get('DocumentName', 'user-document')  # Установка значения по умолчанию
     fields = image_info['Fields']
     file_path = f"/tmp/{object_name}"
 
     await storage.download_file(bucket_name, object_name, file_path)
 
-    # Load the image
+    # Загрузка изображения
     image = cv2.imread(file_path)
 
     recognized_fields = {}
-    field_config = DOCUMENT_FIELD_CONFIGS.get(document_name, {})
-
-    for field_name, bboxes in fields.items():
-        recognized_fields[field_name] = []
-        transformations = field_config.get(field_name, FieldTransformations(field_type=FieldType.TEXT))
-        
-        for bbox in bboxes:
-            recognized_text = model.recognize_text(image, bbox, transformations)
-            recognized_fields[field_name].append(recognized_text)
+    
+    if document_name == 'user-document':
+        transformations = FieldTransformations(field_type=FieldType.TEXT, rotate=None, binarize=True)
+        for field_name, bboxes in fields.items():
+            recognized_fields[field_name] = []
+            for bbox in bboxes:
+                recognized_text = model.recognize_text(image, bbox, transformations)
+                recognized_fields[field_name].append(recognized_text)
+    else:
+        field_config = DOCUMENT_FIELD_CONFIGS.get(document_name, {})
+        for field_name, bboxes in fields.items():
+            recognized_fields[field_name] = []
+            transformations = field_config.get(field_name, FieldTransformations(field_type=FieldType.TEXT))
+            for bbox in bboxes:
+                recognized_text = model.recognize_text(image, bbox, transformations)
+                recognized_fields[field_name].append(recognized_text)
 
     result_message = {
         'RequestId': image_info['RequestId'],
         'BucketName': image_info['BucketName'],
         'ObjectName': image_info['ObjectName'],
-        'DocumentName': image_info['DocumentName'],
+        'DocumentName': document_name,  # Использование обновленного document_name
         'Fields': recognized_fields,
     }
 

@@ -18,7 +18,7 @@ services:
       - KEYCLOAK_ADMIN=admin
       - KEYCLOAK_ADMIN_PASSWORD=admin
     volumes:
-      - ./config:/opt/keycloak/data/import
+      - ./config/keycloak:/opt/keycloak/data/import
     ports:
       - 8080:8080
     command: ["start-dev", "--import-realm"]

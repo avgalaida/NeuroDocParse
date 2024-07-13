@@ -20,7 +20,7 @@
           <button type="button" @click="cropAndSaveImage">Обрезать и сохранить</button>
         </div>
         <div v-if="isCropped">
-          <canvas ref="annotatedImageCanvas" :width="canvasWidth" :height="canvasHeight" @click="selectFieldArea"></canvas>
+          <canvas ref="annotatedImageCanvas" :width="canvasWidth" :height="canvasHeight" @mousedown="startDrawing" @mousemove="draw" @mouseup="finishDrawing"></canvas>
           <div class="fields-container">
             <div v-for="(field, index) in fields" :key="index" class="field" @click="highlightField(index)">
               <input v-model="field.name" placeholder="Название поля" />
@@ -33,6 +33,14 @@
       </div>
       <div v-if="loading">Загрузка...</div>
       <div v-if="error">Ошибка: {{ error.message }}</div>
+      <div v-if="result">
+        <h2>Результат распознавания</h2>
+        <div v-for="(value, key) in result.Fields" :key="key" class="result-field">
+          <label :for="key">{{ key }}:</label>
+          <input :id="key" v-model="result.Fields[key]" />
+        </div>
+        <button>Скачать JSON</button>
+      </div>
     </form>
   </div>
 </template>
@@ -63,6 +71,12 @@ export default {
       isCropped: false,
       canvasWidth: 0,
       canvasHeight: 0,
+      drawing: false,
+      startX: 0,
+      startY: 0,
+      currentWidth: 0,
+      currentHeight: 0,
+      result: null,
     };
   },
   mounted() {
@@ -96,10 +110,10 @@ export default {
       if (this.$refs.annotatedImageCanvas) {
         const rect = this.$refs.annotatedImageCanvas.getBoundingClientRect();
         field.coordinates = [
-          rect.left,
-          rect.top,
-          rect.right,
-          rect.bottom,
+          this.startX,
+          this.startY,
+          this.startX + this.currentWidth,
+          this.startY + this.currentHeight,
         ];
       }
     },
@@ -165,6 +179,35 @@ export default {
         });
       }
     },
+    startDrawing(event) {
+      const rect = this.$refs.annotatedImageCanvas.getBoundingClientRect();
+      this.startX = event.clientX - rect.left;
+      this.startY = event.clientY - rect.top;
+      this.drawing = true;
+    },
+    draw(event) {
+      if (!this.drawing) return;
+      const rect = this.$refs.annotatedImageCanvas.getBoundingClientRect();
+      const ctx = this.$refs.annotatedImageCanvas.getContext('2d');
+      const currentX = event.clientX - rect.left;
+      const currentY = event.clientY - rect.top;
+      this.currentWidth = currentX - this.startX;
+      this.currentHeight = currentY - this.startY;
+      ctx.clearRect(0, 0, this.$refs.annotatedImageCanvas.width, this.$refs.annotatedImageCanvas.height);
+      const img = new Image();
+      img.src = this.newCroppedImageSrc;
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, this.$refs.annotatedImageCanvas.width, this.$refs.annotatedImageCanvas.height);
+        ctx.beginPath();
+        ctx.rect(this.startX, this.startY, this.currentWidth, this.currentHeight);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'red';
+        ctx.stroke();
+      };
+    },
+    finishDrawing() {
+      this.drawing = false;
+    },
     async submitMarkup() {
       if (!this.newCroppedImageSrc || !this.fields.length || !this.userId) return;
 
@@ -192,6 +235,7 @@ export default {
         });
 
         if (data) {
+          this.result = data.uploadImageWithFields;
           console.log('Image upload with fields mutation successful.');
         } else {
           throw new Error('No data returned from mutation.');
@@ -260,5 +304,18 @@ input[type="text"] {
 .document-image {
   max-width: 100%;
   height: auto;
+}
+
+.results-container {
+  margin-top: 20px;
+}
+
+.result-field {
+  margin-bottom: 10px;
+}
+
+.result-field input {
+  width: 100%;
+  padding: 5px;
 }
 </style>

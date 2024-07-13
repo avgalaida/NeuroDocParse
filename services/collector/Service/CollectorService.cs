@@ -50,6 +50,10 @@ namespace collector.Service
                     {
                         await ProcessDuoRequestAsync(incomingMessage, cancellationToken);
                     }
+                    else if (incomingMessage.RequestType == "ocr")
+                    {
+                        await ProcessOcrRequestAsync(message, cancellationToken);
+                    }
                     else
                     {
                         await _messageBroker.SendMessageAsync("extractData.result", "Unknown Request Type");
@@ -96,7 +100,7 @@ namespace collector.Service
                 RequestId = incomingMessage.RequestId,
                 BucketName = incomingMessage.BucketName,
                 ObjectName = incomingMessage.ObjectName,
-                Model = incomingMessage.Model
+                Model = incomingMessage.Model,
             };
 
             var docDetectRequestMessage = JsonSerializer.Serialize(docDetectRequest);
@@ -121,6 +125,15 @@ namespace collector.Service
             _logger.LogInformation($"Fields detection result: {fieldsResult}");
 
             return fieldsResult;
+        }
+
+        private async Task ProcessOcrRequestAsync(string incomingMessage, CancellationToken cancellationToken)
+        {
+            var textRecognitionRes = await ProcessTextRecognitionRequestAsync(incomingMessage,  cancellationToken);
+
+            // await SaveRequestToDatabase(incomingMessage, textRecognitionRes);
+
+            await _messageBroker.SendMessageAsync("extractData.result", textRecognitionRes);
         }
 
         private async Task<string> ProcessTextRecognitionRequestAsync(string fieldsDetectRes, CancellationToken cancellationToken)
